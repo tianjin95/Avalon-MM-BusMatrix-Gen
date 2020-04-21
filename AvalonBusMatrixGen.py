@@ -13,7 +13,7 @@ import math
 NumSlave = 6
 
 # The Number of Master
-NumMaster = 8
+NumMaster = 9
 
 # Width of Address
 WidthAddr = 64
@@ -34,10 +34,10 @@ WidthNumSlv = math.ceil(math.log(NumSlave,2))
 SizeSlvAddr = 9
 
 # Connection between Master and Slave
-Connection = [ [1,1,0,0,0,0], [0,0,1,0,0,0], [0,0,0,1,0,0], [0,0,0,0,1,0], [0,0,0,0,0,1], [0,1,1,1,1,1], [0,1,1,1,1,1], [1,1,1,1,1,1] ]
+Connection = [ [1,1,0,0,0,0], [0,0,1,0,0,0], [0,0,0,1,0,0], [0,0,0,0,1,0], [0,0,0,0,0,1], [0,1,1,1,1,1], [0,1,1,1,1,1], [1,1,1,1,1,1], [1,1,1,1,1,1] ]
 
 # Output Path
-OutputPath = "./verilog/"
+OutputPath = "./AvalonBus/"
 
 
 
@@ -94,7 +94,7 @@ for i in range(0,NumSlave):
 
 # Write Read Sel DFF
 fdec.write("\nreg\t["+str(NumSlave-1)+":0]\tSel;\n\n")
-fdec.write("always@(posedge clk or negedge rstn\n")
+fdec.write("always@(posedge clk or negedge rstn)\n")
 fdec.write("\tif(~rstn)\n")
 fdec.write("\t\tSel\t<=\t"+str(NumSlave)+"'b0;\n")
 fdec.write("\telse if(~WaitReq_o)\n")
@@ -181,12 +181,15 @@ for i in range(0,NumMaster):
 farb.write("assign\tPortSel_o\t=\t")
 for i in range(0,NumMaster):
     if(i == 0):
-        farb.write("({"+str(WidthNumMst)+"{Req"+str(i)+"_i}}\t&\t"+str(WidthNumMst)+"'h"+str(i)+")\t|\n")
+        farb.write("Req"+str(i)+"_i\t?\t"+str(WidthNumMst)+"'h"+str(i)+"\t:\t(\n")
     else:
-        farb.write("\t\t\t\t\t\t({"+str(WidthNumMst)+"{Req"+str(i)+"_i}}\t&\t"+str(WidthNumMst)+"'h"+str(i)+")\t")
+        farb.write("\t\t\t\t\t\tReq"+str(i)+"_i\t?\t"+str(WidthNumMst)+"'h"+str(i)+"\t:\t")
         if(i < NumMaster-1):
-            farb.write("|\n")
+            farb.write("(\n")
         else:
+            farb.write(str(WidthNumMst)+"'h0")
+            for j in range(0,NumMaster-1):
+                farb.write(")")
             farb.write(";\n\n")
 
 # Write endmodule
@@ -226,8 +229,8 @@ for i in range(0,NumMaster):
     # Write Master Input Signals
     for j in MtxBusInList:
         fmtx.write("\tinput\twire\t")
-        if(j == "Addr_i"):
-            fmtx.write("["+str(WidthAddr-1)+":0]\t")
+        if(j == "Addr"):
+            fmtx.write("["+str(WidthAddr-1)+":0]\t\t")
         elif(j == "ByteEn"):
             fmtx.write("["+str(WidthByteEn-1)+":0]\t\t")
         elif(j == "WrData"):
@@ -250,8 +253,8 @@ for i in range(0,NumSlave):
     # Write Slave Output Signals
     for j in MtxBusInList:
         fmtx.write("\toutput\twire\t")
-        if(j == "Addr_i"):
-            fmtx.write("["+str(WidthAddr-1)+":0]\t")
+        if(j == "Addr"):
+            fmtx.write("["+str(WidthAddr-1)+":0]\t\t")
         elif(j == "ByteEn"):
             fmtx.write("["+str(WidthByteEn-1)+":0]\t\t")
         elif(j == "WrData"):
@@ -288,7 +291,7 @@ for i in range(0,NumMaster):
 fmtx.write("\n")
 
 for i in range(0,NumSlave):
-    fmtx.write("wire\t["+str(WidthNumSlv-1)+":0]\tSlave"+str(i)+"PortSel;\n")
+    fmtx.write("wire\t["+str(WidthNumMst-1)+":0]\tSlave"+str(i)+"PortSel;\n")
 
 # Inst Decoder
 for i in range(0,NumMaster):
@@ -304,7 +307,10 @@ for i in range(0,NumMaster):
         fmtx.write("\t."+j+"_i\t\t\t\t\t"+"(Master"+str(i)+j+"_i),\n")
     for j in range(0,NumSlave):
         for k in DecSlvSigList:
-            fmtx.write("\t."+k+str(j)+"_i\t\t\t\t"+"(Slave"+str(j)+k+"_i),\n")
+            if(k == "PortSel"):
+                fmtx.write("\t."+k+str(j)+"_i\t\t\t\t"+"(Slave"+str(j)+k+"),\n")
+            else:
+                fmtx.write("\t."+k+str(j)+"_i\t\t\t\t"+"(Slave"+str(j)+k+"_i),\n")
     for j in range(0,NumSlave):
         fmtx.write("\t.Req"+str(j)+"_o\t\t\t\t\t"+"(Master"+str(i)+"Req"+str(j)+"),\n")
     fmtx.write("\t.RdDataDec_o\t\t\t(Master"+str(i)+"RdData_o),\n")
@@ -328,7 +334,7 @@ for i in MtxBusInList:
     for j in range(0,NumSlave):
         fmtx.write("assign\tSlave"+str(j)+i+"_o\t=\t(")
         if(i == "Addr"):
-            fmtx.write("{"+str(WidthAddr)+"{Slave"+str(j)+"PortNoSel}})\t&\t(\n")
+            fmtx.write("{"+str(WidthAddr)+"{~Slave"+str(j)+"PortNoSel}})\t&\t(\n")
             for k in range(0,NumMaster):
                 fmtx.write("\t\t\t\t\t\t\t({"+str(WidthAddr)+"{Slave"+str(j)+"PortSel\t==\t"+str(WidthNumMst)+"'h"+str(k)+"}}\t&\tMaster"+str(k)+i+"_i)\t")
                 if(k == NumMaster-1):
@@ -336,7 +342,7 @@ for i in MtxBusInList:
                 else:
                     fmtx.write("|\n")
         elif(i == "ByteEn"):
-            fmtx.write("{"+str(WidthByteEn)+"{Slave"+str(j)+"PortNoSel}})\t&\t(\n")
+            fmtx.write("{"+str(WidthByteEn)+"{~Slave"+str(j)+"PortNoSel}})\t&\t(\n")
             for k in range(0,NumMaster):
                 fmtx.write("\t\t\t\t\t\t\t({"+str(WidthByteEn)+"{Slave"+str(j)+"PortSel\t==\t"+str(WidthNumMst)+"'h"+str(k)+"}}\t&\tMaster"+str(k)+i+"_i)\t")
                 if(k == NumMaster-1):
@@ -344,7 +350,7 @@ for i in MtxBusInList:
                 else:
                     fmtx.write("|\n")
         elif(i == "WrData"):
-            fmtx.write("{"+str(WidthData)+"{Slave"+str(j)+"PortNoSel}})\t&\t(\n")
+            fmtx.write("{"+str(WidthData)+"{~Slave"+str(j)+"PortNoSel}})\t&\t(\n")
             for k in range(0,NumMaster):
                 fmtx.write("\t\t\t\t\t\t\t({"+str(WidthData)+"{Slave"+str(j)+"PortSel\t==\t"+str(WidthNumMst)+"'h"+str(k)+"}}\t&\tMaster"+str(k)+i+"_i)\t")
                 if(k == NumMaster-1):
@@ -352,7 +358,7 @@ for i in MtxBusInList:
                 else:
                     fmtx.write("|\n")
         else:
-            fmtx.write("(Slave"+str(j)+"PortNoSel))\t&\t(\n")
+            fmtx.write("(~Slave"+str(j)+"PortNoSel))\t&\t(\n")
             for k in range(0,NumMaster):
                 fmtx.write("\t\t\t\t\t\t\t((Slave"+str(j)+"PortSel\t==\t"+str(WidthNumMst)+"'h"+str(k)+")\t&\tMaster"+str(k)+i+"_i)\t")
                 if(k == NumMaster-1):
